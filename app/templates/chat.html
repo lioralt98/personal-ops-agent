@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Ops Agent | Mission Control</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        /* --- CSS VARIABLES & THEME --- */
+        :root {
+            /* Palette: Linear-inspired Dark Mode */
+            --bg-app: #0E1012;
+            --bg-panel: #141619;
+            --bg-surface: #1C1F24;
+            --bg-surface-hover: #23272F;
+            
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --border-highlight: rgba(255, 255, 255, 0.12);
+            
+            --text-main: #EDEDED;
+            --text-secondary: #8A8F98;
+            --text-tertiary: #585C65;
+
+            --accent-primary: #5E6AD2; /* Blurple */
+            --accent-glow: rgba(94, 106, 210, 0.15);
+            --accent-success: #3D9970;
+            --accent-warning: #FFDC00;
+            --accent-tool: #D97706; /* Amber for tool usage */
+
+            /* Typography */
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+            /* Spacing */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+
+        /* --- RESET & BASE --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background-color: var(--bg-app);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-surface-hover); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+        /* --- LAYOUT: 3-COLUMN BENTO GRID --- */
+        .app-container {
+            display: grid;
+            grid-template-columns: 260px 1fr 360px;
+            grid-template-rows: 100vh;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* --- COLUMN 1: SIDEBAR (NAVIGATION) --- */
+        .sidebar {
+            background-color: var(--bg-app);
+            border-right: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            padding: var(--spacing-md);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: var(--spacing-lg);
+            padding: 0 var(--spacing-xs);
+        }
+
+        .section-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-tertiary);
+            margin-bottom: var(--spacing-sm);
+            margin-top: var(--spacing-lg);
+            padding-left: var(--spacing-xs);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: var(--bg-surface);
+            color: var(--text-main);
+        }
+
+        .nav-item.active {
+            border-left: 2px solid var(--accent-primary); /* Active indicator */
+        }
+
+        .tool-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-left: auto;
+        }
+        .status-active { background-color: var(--accent-success); box-shadow: 0 0 4px var(--accent-success); }
+        .status-idle { background-color: var(--text-tertiary); }
+
+        /* --- COLUMN 2: MAIN CHAT (THE STREAM) --- */
+        .main-chat {
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--bg-app);
+        }
+
+        /* Mobile Header (Hidden on Desktop) */
+        .mobile-header {
+            display: none;
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border-subtle);
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-stream {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-lg) var(--spacing-lg) 100px var(--spacing-lg); /* Padding bottom for input */
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        /* Message Component */
+        .message-row {
+            display: flex;
+            gap: var(--spacing-md);
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .message-row.user {
+            justify-content: flex-end;
+        }
+
+        .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, var(--accent-primary), #8E99F0);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+            max-width: 85%;
+        }
+
+        .user .message-bubble {
+            background-color: var(--bg-surface);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-lg) var(--radius-lg) 0 var(--radius-lg);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .agent .message-bubble {
+            background: transparent;
+            padding: 0;
+            color: var(--text-main);
+            line-height: 1.6;
+        }
+
+        /* Thinking Accordion */
+        details.thinking-process {
+            border-left: 2px solid var(--border-highlight);
+            padding-left: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            cursor: pointer;
+        }
+
+        details.thinking-process summary {
+            color: var(--text-tertiary);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            transition: color 0.2s;
+        }
+        
+        details.thinking-process summary:hover { color: var(--text-secondary); }
+        details.thinking-process summary::-webkit-details-marker { display: none; }
+
+        .thinking-content {
+            margin-top: var(--spacing-sm);
+            color: var(--text-secondary);
+            font-size: 13px;
+            background: var(--bg-surface);
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+        }
+
+        /* Tool Usage Chip */
+        .tool-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(217, 119, 6, 0.1); /* Amber tint */
+            border: 1px solid rgba(217, 119, 6, 0.3);
+            color: #FBBF24;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            margin-bottom: var(--spacing-xs);
+            width: fit-content;
+        }
+        
+        .tool-chip i { animation: spin 2s linear infinite; }
+
+        /* The "Cockpit" Input Area */
+        .input-cockpit-wrapper {
+            position: absolute;
+            bottom: var(--spacing-lg);
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 760px;
+            z-index: 10;
+        }
+
+        .input-cockpit {
+            background: rgba(20, 22, 25, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-highlight);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-sm);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-cockpit:focus-within {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-glow), 0 8px 32px rgba(0,0,0,0.4);
+        }
+
+        .input-textarea {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            resize: none;
+            padding: var(--spacing-sm);
+            font-family: var(--font-sans);
+            font-size: 15px;
+            outline: none;
+            min-height: 24px;
+            max-height: 120px;
+        }
+
+        .input-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 var(--spacing-sm);
+        }
+
+        .input-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: color 0.2s, background 0.2s;
+            font-size: 16px;
+        }
+
+        .icon-btn:hover {
+            color: var(--text-main);
+            background: var(--bg-surface-hover);
+        }
+
+        .send-hint {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-family: var(--font-mono);
+        }
+
+        /* --- COLUMN 3: OPS PANEL (ARTIFACTS) --- */
+        .ops-panel {
+            background-color: var(--bg-panel);
+            border-left: 1px solid var(--border-subtle);
+            padding: var(--spacing-md);
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-lg);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Artifact Card */
+        .artifact-card {
+            background: var(--bg-app);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .artifact-card:hover {
+            border-color: var(--border-highlight);
+        }
+
+        .artifact-header {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-sm);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .artifact-content {
+            font-size: 13px;
+            color: var(--text-main);
+        }
+
+        .email-preview {
+            font-family: var(--font-sans);
+            background: var(--bg-surface);
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            border-left: 2px solid var(--accent-tool);
+        }
+
+        .email-subject {
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .calendar-preview {
+            display: flex;
+            gap: var(--spacing-md);
+            align-items: center;
+        }
+        
+        .date-box {
+            background: var(--bg-surface);
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            text-align: center;
+            border: 1px solid var(--border-subtle);
+        }
+        
+        .date-box .month { font-size: 10px; text-transform: uppercase; color: var(--accent-primary); display: block; }
+        .date-box .day { font-size: 18px; font-weight: 700; }
+
+        /* --- RESPONSIVE ADJUSTMENTS --- */
+        @media (max-width: 1024px) {
+            .app-container {
+                grid-template-columns: 1fr; /* Single column */
+            }
+            
+            .sidebar, .ops-panel {
+                position: fixed;
+                top: 0;
+                height: 100vh;
+                z-index: 100;
+                transform: translateX(-100%);
+                transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+
+            .sidebar { width: 280px; left: 0; border-right: 1px solid var(--border-highlight); box-shadow: 10px 0 30px rgba(0,0,0,0.5); }
+            .ops-panel { width: 320px; right: 0; left: auto; transform: translateX(100%); border-left: 1px solid var(--border-highlight); box-shadow: -10px 0 30px rgba(0,0,0,0.5); background: var(--bg-panel); }
+
+            .mobile-header { display: flex; }
+            .input-cockpit-wrapper { width: 95%; }
+
+            /* Classes toggled via JS */
+            .sidebar-open .sidebar { transform: translateX(0); }
+            .panel-open .ops-panel { transform: translateX(0); }
+            
+            /* Overlay */
+            .overlay {
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.6);
+                backdrop-filter: blur(2px);
+                z-index: 90;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.3s;
+            }
+            
+            .sidebar-open .overlay, .panel-open .overlay {
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
+
+        /* Animations */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .animate-entry { animation: fadeIn 0.4s ease-out forwards; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Overlay for mobile drawers -->
+    <div class="overlay" id="overlay" onclick="closeDrawers()"></div>
+
+    <div class="app-container">
+        <!-- LEFT COLUMN: SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <i class="ph ph-cube-transparent" style="font-size: 20px; color: var(--accent-primary);"></i>
+                <span>Ops Agent</span>
+            </div>
+
+            <div class="section-label">Active Mission</div>
+            <div class="nav-item active">
+                <i class="ph ph-chat-circle-text"></i>
+                <span>Weekly Sync Prep</span>
+            </div>
+
+            <div class="section-label">Connected Tools</div>
+            <div class="nav-item">
+                <i class="ph ph-calendar-blank"></i>
+                <span>Calendar</span>
+                <div class="tool-status status-active"></div>
+            </div>
+            <div class="nav-item">
+                <i class="ph ph-envelope-simple"></i>
+                <span>Gmail</span>
+                <div class="tool-status status-active"></div>
+            </div>
+            <div class="nav-item">
+                <i class="ph ph-slack-logo"></i>
+                <span>Slack</span>
+                <div class="tool-status status-idle"></div>
+            </div>
+            <div class="nav-item">
+                <i class="ph ph-notion-logo"></i>
+                <span>Notion</span>
+                <div class="tool-status status-active"></div>
+            </div>
+
+            <div class="section-label">History</div>
+            <div class="nav-item">
+                <i class="ph ph-clock-counter-clockwise"></i>
+                <span>Flight Booking</span>
+            </div>
+            <div class="nav-item">
+                <i class="ph ph-clock-counter-clockwise"></i>
+                <span>Q3 Report Data</span>
+            </div>
+        </aside>
+
+        <!-- CENTER COLUMN: MAIN CHAT -->
+        <main class="main-chat">
+            <header class="mobile-header">
+                <button class="icon-btn" onclick="toggleSidebar()"><i class="ph ph-list" style="font-size: 20px;"></i></button>
+                <span style="font-weight: 600; font-size: 14px;">Weekly Sync Prep</span>
+                <button class="icon-btn" onclick="togglePanel()"><i class="ph ph-sidebar" style="font-size: 20px;"></i></button>
+            </header>
+
+            <div class="chat-stream">
+                <!-- Chat is now empty by default, waiting for JS to populate -->
+            </div>
+
+            <!-- The Cockpit Input -->
+            <div class="input-cockpit-wrapper">
+                <div class="input-cockpit">
+                    <textarea class="input-textarea" placeholder="Ask your agent..." rows="1" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                    <div class="input-footer">
+                        <div class="input-actions">
+                            <button class="icon-btn" title="Add Attachment"><i class="ph ph-paperclip"></i></button>
+                            <button class="icon-btn" title="Slash Commands"><i class="ph ph-command"></i></button>
+                            <button class="icon-btn" title="Voice"><i class="ph ph-microphone"></i></button>
+                        </div>
+                        <span class="send-hint">Return to send</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- RIGHT COLUMN: OPS PANEL -->
+        <aside class="ops-panel" id="opsPanel">
+            <div class="panel-header">
+                <span class="panel-title">Current Artifacts</span>
+                <div class="input-actions">
+                    <button class="icon-btn"><i class="ph ph-dots-three"></i></button>
+                </div>
+            </div>
+
+            <!-- Artifact 1: Calendar Event -->
+            <div class="artifact-card animate-entry" style="animation-delay: 0.2s;">
+                <div class="artifact-header">
+                    <i class="ph ph-calendar-check" style="color: var(--accent-success);"></i>
+                    <span>Calendar Event Created</span>
+                </div>
+                <div class="artifact-content calendar-preview">
+                    <div class="date-box">
+                        <span class="month">Nov</span>
+                        <span class="day">26</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600;">Marketing Sync</div>
+                        <div style="color: var(--text-secondary); font-size: 12px;">10:00 AM - 11:00 AM</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Artifact 2: Draft Email -->
+            <div class="artifact-card animate-entry" style="animation-delay: 0.3s;">
+                <div class="artifact-header">
+                    <i class="ph ph-pencil-simple-line" style="color: var(--accent-tool);"></i>
+                    <span>Draft Generated</span>
+                </div>
+                <div class="artifact-content">
+                    <div class="email-preview">
+                        <span class="email-subject">Agenda: Project Atlas Review</span>
+                        <p style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">
+                            Hi Team,<br><br>
+                            For tomorrow's sync, we will cover:<br>
+                            1. Q3 User Growth (+15%)<br>
+                            2. Mobile Latency Fixes<br>
+                            3. Q4 Roadmap Adjustments<br>
+                        </p>
+                    </div>
+                    <div style="margin-top: 8px; display: flex; gap: 8px;">
+                        <button style="background: var(--bg-surface-hover); border: 1px solid var(--border-subtle); color: var(--text-main); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Edit</button>
+                        <button style="background: var(--accent-primary); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Send</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Context Context -->
+            <div class="panel-header" style="margin-top: 32px;">
+                <span class="panel-title">Context</span>
+            </div>
+             <div class="artifact-card animate-entry" style="animation-delay: 0.4s;">
+                <div class="artifact-header">
+                    <i class="ph ph-link" style="color: var(--text-tertiary);"></i>
+                    <span>Related Documents</span>
+                </div>
+                <div class="nav-item" style="padding: 4px 0;">
+                    <i class="ph ph-file-pdf"></i> Atlas_Q3_Metrics.pdf
+                </div>
+                 <div class="nav-item" style="padding: 4px 0;">
+                    <i class="ph ph-file-text"></i> Meeting Notes Oct 12
+                </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <script>
+        // Simple JS for Mobile Toggle
+        function toggleSidebar() {
+            document.body.classList.toggle('sidebar-open');
+            document.body.classList.remove('panel-open');
+        }
+
+        function togglePanel() {
+            document.body.classList.toggle('panel-open');
+            document.body.classList.remove('sidebar-open');
+        }
+
+        function closeDrawers() {
+            document.body.classList.remove('sidebar-open');
+            document.body.classList.remove('panel-open');
+        }
+
+        // Auto-scroll to bottom of chat on load
+        const chatStream = document.querySelector('.chat-stream');
+        chatStream.scrollTop = chatStream.scrollHeight;
+
+        // 1. Select the input element
+        const inputField = document.querySelector('.input-textarea');
+
+        // 2. Listen for the 'Enter' key
+        inputField.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault(); // Prevent new line
+                const userText = inputField.value.trim();
+                
+                if (!userText) return;
+
+                // Clear input immediately for better UX
+                inputField.value = '';
+                inputField.style.height = 'auto'; // Reset height
+
+                // Call your API
+                await sendMessageToLLM(userText);
+            }
+        });
+
+        // 3. The API Call function
+        async function sendMessageToLLM(message) {
+            try {
+                // Optimistic UI Update: Show user message immediately
+                addMessageToUI('user', message);
+
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+                
+                // Show agent response
+                // Assuming data returns { response: "text", thought: "optional", tool: "optional" }
+                addMessageToUI('agent', data.response, null, data.tool_calls);
+
+            } catch (error) {
+                console.error("Error calling chat API:", error);
+                // Fallback for demo/testing without backend
+                setTimeout(() => {
+                    addMessageToUI('agent', "I'm having trouble connecting to the server, but I received your message: " + message);
+                }, 1000);
+            }
+        }
+
+        // 4. Dynamic Message Rendering Function
+        function addMessageToUI(role, text, thoughtProcess = null, toolCalls = null) {
+            const stream = document.querySelector('.chat-stream');
+            const row = document.createElement('div');
+            row.className = `message-row ${role} animate-entry`;
+
+            let contentHtml = '';
+
+            if (role === 'user') {
+                contentHtml = `
+                    <div class="message-content">
+                        <div class="message-bubble">${text}</div>
+                    </div>
+                `;
+            } else {
+                // Agent Logic
+                const avatar = `<div class="avatar"><i class="ph ph-robot"></i></div>`;
+                
+                let toolHtml = '';
+                if (toolCalls) {
+                    toolHtml = `<div class="tool-chip"><i class="ph ph-lightning"></i> ${toolCalls.join(', ')}</div>`;
+                }
+
+                let thoughtHtml = '';
+                if (thoughtProcess) {
+                    thoughtHtml = `
+                        <details class="thinking-process">
+                            <summary><i class="ph ph-caret-right"></i> Thought Process</summary>
+                            <div class="thinking-content">${thoughtProcess}</div>
+                        </details>
+                    `;
+                }
+
+                contentHtml = `
+                    ${avatar}
+                    <div class="message-content">
+                        ${toolHtml}
+                        ${thoughtHtml}
+                        <div class="message-bubble">${text}</div>
+                    </div>
+                `;
+            }
+
+            row.innerHTML = contentHtml;
+            stream.appendChild(row);
+            
+            // Scroll to bottom
+            stream.scrollTop = stream.scrollHeight;
+        }
+    </script>
+</body>
+</html>

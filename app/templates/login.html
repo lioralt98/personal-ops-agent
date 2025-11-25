@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in - OpsAI</title>
+    <style>
+        /* * DESIGN SYSTEM: FOCUSED LUXURY
+         * Palette: Dark Mode / Deep Charcoal
+         */
+        :root {
+            /* Colors */
+            --bg-page: #0F1115;
+            --bg-panel: #16191E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #9CA3AF;
+            --text-tertiary: #4B5563;
+            
+            /* Button Colors */
+            --btn-bg: #FFFFFF;
+            --btn-text: #1F1F1F;
+            --btn-hover-shadow: rgba(255, 255, 255, 0.15);
+            
+            /* Gradient Accents (Art Side) */
+            --accent-1: #4F46E5; /* Indigo */
+            --accent-2: #8B5CF6; /* Violet - Tweaked for AI feel */
+            --accent-3: #06B6D4; /* Cyan - Tweaked for AI feel */
+            
+            /* Spacing & Layout */
+            --radius-lg: 16px;
+            --radius-md: 8px;
+            --container-max-w: 420px;
+        }
+
+        /* Reset & Base */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; /* Prevent scroll on desktop */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* * LAYOUT: SPLIT SCREEN
+         */
+        .viewport {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* * LEFT PANEL: LOGIN 
+         */
+        .login-panel {
+            flex: 0 0 40%;
+            min-width: 320px; /* Prevent crushing on tiny screens */
+            background-color: var(--bg-page);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        .login-content {
+            width: 100%;
+            max-width: 360px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        /* Typography & Branding */
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            animation: slideUp 0.6s ease-out 0.1s forwards;
+        }
+
+        .brand-icon {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #fff 0%, #a5a5a5 100%);
+            border-radius: 6px;
+        }
+
+        .brand-text {
+            font-size: 1.125rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        .header {
+            opacity: 0;
+            animation: slideUp 0.6s ease-out 0.2s forwards;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.75rem;
+            background: linear-gradient(to right, #fff, #9CA3AF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        /* * HERO COMPONENT: THE GOOGLE BUTTON 
+         */
+        .action-area {
+            opacity: 0;
+            animation: slideUp 0.6s ease-out 0.3s forwards;
+        }
+
+        .google-btn {
+            appearance: none;
+            border: none;
+            outline: none;
+            
+            width: 100%;
+            height: 52px;
+            background-color: var(--btn-bg);
+            border-radius: var(--radius-md);
+            
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            overflow: hidden;
+            
+            /* Text Styling */
+            color: var(--btn-text);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        /* Icon Wrapper to ensure perfect centering */
+        .g-icon-wrapper {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Button Hover States */
+        .google-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.3), 
+                        0 4px 8px -4px rgba(0, 0, 0, 0.2),
+                        0 0 0 4px rgba(255,255,255,0.05); /* Subtle ring */
+        }
+
+        .google-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Footer / Legal */
+        .legal {
+            margin-top: 2rem;
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            text-align: center;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.5s forwards;
+        }
+        
+        .legal a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .legal a:hover {
+            color: var(--text-primary);
+            text-decoration: underline;
+        }
+
+        /* * RIGHT PANEL: ABSTRACT ART 
+         * Uses CSS gradients and blur for a "Glassmorphism/Mesh" look
+         */
+        .art-panel {
+            flex: 1;
+            background-color: #050608;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mesh-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            filter: blur(80px); /* The magic blurring sauce */
+            opacity: 0.8;
+            /* Subtle animation for the background */
+            animation: pulseArt 10s ease-in-out infinite alternate;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+        }
+
+        .orb-1 {
+            top: -10%;
+            right: -10%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(circle, var(--accent-1) 0%, transparent 70%);
+            mix-blend-mode: screen;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .orb-2 {
+            bottom: -10%;
+            left: -10%;
+            width: 70%;
+            height: 70%;
+            background: radial-gradient(circle, var(--accent-2) 0%, transparent 70%);
+            mix-blend-mode: screen;
+            animation: float 25s infinite ease-in-out reverse;
+        }
+
+        .orb-3 {
+            top: 40%;
+            left: 40%;
+            width: 40%;
+            height: 40%;
+            background: radial-gradient(circle, var(--accent-3) 0%, transparent 70%);
+            mix-blend-mode: overlay;
+            animation: float 18s infinite ease-in-out 2s;
+        }
+
+        /* Glass Overlay Text on Art Side (Optional visual interest) */
+        .art-overlay {
+            position: relative;
+            z-index: 2;
+            padding: 3rem;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            max-width: 400px;
+            transform: skewY(-2deg); /* Artistic tilt */
+        }
+        
+        .art-overlay h2 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .quote-line {
+            height: 4px;
+            width: 40px;
+            background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+            margin-bottom: 1rem;
+            border-radius: 2px;
+        }
+
+        /* * ANIMATIONS 
+         */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(30px, -50px) rotate(10deg); }
+            66% { transform: translate(-20px, 20px) rotate(-5deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+        
+        @keyframes pulseArt {
+            0% { opacity: 0.6; transform: scale(1); }
+            100% { opacity: 0.9; transform: scale(1.05); }
+        }
+
+        /* * RESPONSIVE BREAKPOINTS 
+         */
+        @media (max-width: 900px) {
+            .art-panel {
+                display: none; /* Hide art on mobile/tablet per requirements */
+            }
+            
+            .login-panel {
+                flex: 1;
+                width: 100%;
+                background: radial-gradient(circle at top right, #1a1d24 0%, var(--bg-page) 50%);
+            }
+
+            .login-content {
+                max-width: 100%;
+                padding: 0 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="viewport">
+        <!-- LEFT: Login Content -->
+        <main class="login-panel">
+            <div class="login-content">
+                
+                <!-- Branding -->
+                <div class="brand">
+                    <div class="brand-icon"></div>
+                    <span class="brand-text">OpsAI</span>
+                </div>
+
+                <!-- Headline -->
+                <header class="header">
+                    <h1>Automate your potential</h1>
+                    <p>Your personal operations AI awaits. Sync your goals, schedules, and tasks in one click.</p>
+                </header>
+
+                <!-- Action Area -->
+                <div class="action-area">
+                    <button class="google-btn" type="button" onclick=handleLogin()>
+                        <div class="g-icon-wrapper">
+                            <!-- Official Google "G" Logo SVG -->
+                            <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20px" height="20px">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                            </svg>
+                        </div>
+                        <span>Continue with Google</span>
+                    </button>
+                    
+                    <div class="legal">
+                        By continuing, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- RIGHT: Art / Ambient Side -->
+        <aside class="art-panel">
+            <div class="mesh-container">
+                <div class="orb orb-1"></div>
+                <div class="orb orb-2"></div>
+                <div class="orb orb-3"></div>
+            </div>
+            
+            <!-- Floating Card Effect -->
+            <div class="art-overlay">
+                <div class="quote-line"></div>
+                <h2>From chaos to clarity.</h2>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.9rem;">Turn your intent into action with intelligent scheduling.</p>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        function handleLogin() {
+            window.location.href = "/auth/oauth2/google";
+        }
+    </script>
+
+</body>
+</html>
