@@ -15,7 +15,7 @@ class Attendee(SQLModel):
     responseStatus: str
     
 class CalendarEvent(SQLModel):
-    id: Optional[int]
+    id: Optional[str]
     status: Optional[str]
     summary: Optional[str]
     description: Optional[str]

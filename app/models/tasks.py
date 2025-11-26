@@ -8,18 +8,18 @@ class Link(SQLModel):
     link: str
 
 class Task(SQLModel):
-    id: Optional[int]
+    id: Optional[str]
     title: str
     status: str
-    notes: Optional[str]
-    completed: Optional[str]
-    updated: Optional[str]
-    links: Optional[List[Link]]
+    notes: Optional[str] = None
+    completed: Optional[str] = None
+    updated: Optional[str] = None
+    links: Optional[List[Link]] = None
 
 class TaskList(SQLModel):
-    id: Optional[int]
+    id: Optional[str]
     title: str
-    updated: Optional[str]
+    updated: Optional[str] = None
     
     
     

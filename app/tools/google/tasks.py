@@ -1,19 +1,17 @@
 from typing import List, Annotated
 
-from sqlmodel import Session
-import requests
 from langchain.tools import tool, BaseTool
 from langgraph.prebuilt import InjectedState
 from langchain_core.runnables import RunnableConfig
 
-import app.services.tokens as tokens_service
+from app.tools.google.api_client import make_google_request
 from app.core.config import get_settings
 from app.models.tasks import TaskList, Task
 
 settings = get_settings()
 
 @tool
-def insert_tasklist(tasklist: TaskList, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> TaskList:
+def insert_tasklist(tasklist: TaskList, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> TaskList:
     """Create a new task list to organize related tasks.
 
     Use this tool when the user explicitly wants to create a separate category or list for tasks (e.g., "Create a shopping list" or "New project tasks").
@@ -30,27 +28,19 @@ def insert_tasklist(tasklist: TaskList, user_id: Annotated[str, InjectedState("u
         Do NOT use this for creating individual tasks; use `insert_task` for that. If the operation fails, return None.
     """
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.post(f"{settings.google_tasks_tasklist_endpoint}",
-                             json=tasklist.model_dump(),
-                             headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error inserting tasklist: {e}")
-        return None
-    tasklist_data = response.json()
-    tasklist = TaskList.model_validate(tasklist_data)
+    tasklist_data = make_google_request(user_id,
+                                        session,
+                                        "POST",
+                                        settings.google_tasks_tasklist_endpoint,
+                                        json=tasklist.model_dump_json())
     
-    return tasklist
-
+    if not tasklist_data:
+        return None
+    
+    return TaskList.model_validate(tasklist_data)
 
 @tool
-def get_tasklist(tasklist_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> TaskList:
+def get_tasklist(tasklist_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> TaskList:
     """Retrieve metadata for a specific task list by its unique ID.
 
     Use this to verify if a list exists or to get its current title/etag before updating.
@@ -68,26 +58,18 @@ def get_tasklist(tasklist_id: str, user_id: Annotated[str, InjectedState("user_i
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-
-    try:
-        response = requests.get(f"{settings.google_tasks_get_tasklist_endpoint}/{tasklist_id}",
-                            headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error getting tasklist: {e}")
-        return None
-    tasklist_data = response.json()
-    tasklist = TaskList.model_validate(tasklist_data)
+    tasklist_data = make_google_request(user_id,
+                                        session,
+                                        "GET",
+                                        f"{settings.google_tasks_tasklist_endpoint}/{tasklist_id}")
     
-    return tasklist
+    if not tasklist_data:
+        return None
+    
+    return TaskList.model_validate(tasklist_data)
 
 @tool
-def list_tasklists(user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> List[TaskList]:
+def list_tasklists(user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> List[TaskList]:
     """List all available task lists for the user.
 
     Retrieves all task lists (categories) to help identify the correct list ID for other operations.
@@ -105,29 +87,22 @@ def list_tasklists(user_id: Annotated[str, InjectedState("user_id")], config: Ru
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.get(f"{settings.google_tasks_get_tasklist_endpoint}",
-                            headers=headers)
-        response.raise_for_status()
+    tasklist_list_data = make_google_request(user_id,
+                                        session,
+                                        "GET",
+                                        settings.google_tasks_tasklist_endpoint)
     
-    except Exception as e:
-        print(f"Error listing tasklists: {e}")
+    if not tasklist_list_data:
         return []
-        
-    tasklist_list_data = response.json()
+
     tasklists = []
-    
-    for tl in tasklist_list_data:
-        tasklists.append(TaskList.model_validate(tl).model_dump())
+    for tl in tasklist_list_data.get("items"):
+        tasklists.append(TaskList.model_validate(tl))
     
     return tasklists
 
 @tool
-def update_tasklist(tasklist_id: str, tasklist: TaskList, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> TaskList:
+def update_tasklist(tasklist_id: str, tasklist: TaskList, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> TaskList:
     """Update the properties of an existing task list.
 
     Modifies metadata such as the title of a specific task list.
@@ -146,27 +121,19 @@ def update_tasklist(tasklist_id: str, tasklist: TaskList, user_id: Annotated[str
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.put(f"{settings.google_tasks_tasklist_endpoint}/{tasklist_id}",
-                            json=tasklist.model_dump(),
-                            headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error updating tasklist: {e}")
+    tasklist_data = make_google_request(user_id,
+                                        session,
+                                        "PUT",
+                                        f"{settings.google_tasks_tasklist_endpoint}/{tasklist_id}",
+                                        json=tasklist.model_dump_json())
+    
+    if not tasklist_data:
         return None
     
-    tasklist_data = response.json()
-    tasklist = TaskList.model_validate(tasklist_data)
-    
-    return tasklist
+    return TaskList.model_validate(tasklist_data)
 
 @tool
-def delete_tasklist(tasklist_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig):
+def delete_tasklist(tasklist_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> None:
     """Permanently delete a task list and ALL tasks contained within it.
 
     Removes a task list and every task contained within it. This action is irreversible.
@@ -184,22 +151,15 @@ def delete_tasklist(tasklist_id: str, user_id: Annotated[str, InjectedState("use
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.delete(f"{settings.google_tasks_tasklist_endpoint}/{tasklist_id}",
-                                headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error deleting tasklist: {e}")
-        return None
+    make_google_request(user_id,
+                        session,
+                        "DELETE",
+                        f"{settings.google_tasks_tasklist_endpoint}/{tasklist_id}")
+    
     
 
 @tool
-def insert_task(task: Task, tasklist_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> Task:
+def insert_task(task: Task, tasklist_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> Task:
     """Create a new task within a specific task list.
 
     Adds a new task item to the specified list.
@@ -218,26 +178,19 @@ def insert_task(task: Task, tasklist_id: str, user_id: Annotated[str, InjectedSt
     """
 
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.post(f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks",
-                             json=task.model_dump(),
-                             headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error inserting task: {e}")
-        return None
-    task_data = response.json()
-    task = Task.model_validate(task_data)
+    task_data = make_google_request(user_id,
+                                    session,
+                                    "POST",
+                                    f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks",
+                                    json=task.model_dump_json())
     
-    return task
+    if not task_data:
+        return None
+    
+    return Task.model_validate(task_data)
 
 @tool
-def get_task(task_id: str, tasklist_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> Task:
+def get_task(task_id: str, tasklist_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> Task:
     """Retrieve details of a specific task.
 
     Fetches the full properties of a task, including status, due date, and notes.
@@ -256,25 +209,18 @@ def get_task(task_id: str, tasklist_id: str, user_id: Annotated[str, InjectedSta
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.get(f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks/{task_id}",
-                            headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error getting task: {e}")
-        return None
-    task_data = response.json()
-    task = Task.model_validate(task_data)
+    task_data = make_google_request(user_id,
+                                    session,
+                                    "GET",
+                                    f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks/{task_id}")
     
-    return task
+    if not task_data:
+        return None
+    
+    return Task.model_validate(task_data)
 
 @tool
-def list_tasks(tasklist_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> List[Task]:
+def list_tasks(tasklist_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> List[Task]:
     """List all tasks within a specific task list.
 
     Retrieves all tasks from a given list, useful for searching, checking status, or summarizing.
@@ -292,28 +238,22 @@ def list_tasks(tasklist_id: str, user_id: Annotated[str, InjectedState("user_id"
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.get(f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks",
-                            headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error listing tasks: {e}")
-        return []
-    task_list_data = response.json()
-    tasks = []
+    task_list_data = make_google_request(user_id,
+                                        session,
+                                        "GET",
+                                        f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks")
     
-    for t in task_list_data:
+    if not task_list_data:
+        return []
+    
+    tasks = []
+    for t in task_list_data.get("items"):
         tasks.append(Task.model_validate(t))
         
     return tasks
 
 @tool
-def update_task(task_id: str, task: Task, tasklist_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> Task:
+def update_task(task_id: str, task: Task, tasklist_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> Task:
     """Update an existing task's properties.
 
     Modifies a task's details, such as marking it as complete, changing the title, or updating the due date.
@@ -333,26 +273,19 @@ def update_task(task_id: str, task: Task, tasklist_id: str, user_id: Annotated[s
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.put(f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks/{task_id}",
-                            json=task.model_dump(),
-                            headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error updating task: {e}")
-        return None
-    task_data = response.json()
-    task = Task.model_validate(task_data)
+    task_data = make_google_request(user_id,
+                                    session,
+                                    "PUT",
+                                    f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks/{task_id}",
+                                    json=task.model_dump_json())
     
-    return task
+    if not task_data:
+        return None
+
+    return Task.model_validate(task_data)
 
 @tool
-def delete_task(task_id: str, tasklist_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig):
+def delete_task(task_id: str, tasklist_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> None:
     """Permanently delete a specific task.
 
     Removes a task from its task list. This cannot be undone.
@@ -371,18 +304,11 @@ def delete_task(task_id: str, tasklist_id: str, user_id: Annotated[str, Injected
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    try:
-        response = requests.delete(f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks/{task_id}",
-                            headers=headers)
-        response.raise_for_status()
-        
-    except Exception as e:
-        print(f"Error deleting task: {e}")
-        return None
+    make_google_request(user_id,
+                        session,
+                        "DELETE",
+                        f"{settings.google_tasks_task_endpoint}/{tasklist_id}/tasks/{task_id}")
+
 
 def get_tools():
     tools = []

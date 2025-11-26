@@ -1,19 +1,17 @@
 from typing import List, Annotated
 
 from langchain.tools import tool, BaseTool
-from sqlmodel import Session
-import requests
 from langgraph.prebuilt import InjectedState
 from langchain_core.runnables import RunnableConfig
 
+from app.tools.google.api_client import make_google_request
 from app.models.calendar import CalendarEvent
 from app.core.config import get_settings
-import app.services.tokens as tokens_service
 
 settings = get_settings()
 
 @tool
-def insert_event(event: CalendarEvent, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> CalendarEvent:
+def insert_event(event: CalendarEvent, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> CalendarEvent:
     """Create a new calendar event in the user's primary calendar.
 
     Schedules a new event with a title, start time, and end time.
@@ -35,22 +33,19 @@ def insert_event(event: CalendarEvent, user_id: Annotated[str, InjectedState("us
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    response = requests.post(f"{settings.google_calendar_events_endpoint}",
-                             json=event.model_dump(),
-                             headers=headers)
+    event_data = make_google_request(user_id,
+                                    session,
+                                    "POST",
+                                    settings.google_calendar_events_endpoint,
+                                    json=event.model_dump_json())
     
-    response.raise_for_status()
-    event_data = response.json()
-    event = CalendarEvent.model_validate(event_data)
+    if not event_data:
+        return None
     
-    return event
+    return CalendarEvent.model_validate(event_data)
 
 @tool
-def get_event(event_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> CalendarEvent:
+def get_event(event_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> CalendarEvent:
     """Retrieve full details of a specific calendar event.
 
     Fetches metadata for an event, including description, location, and attendees.
@@ -68,21 +63,18 @@ def get_event(event_id: str, user_id: Annotated[str, InjectedState("user_id")], 
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    response = requests.get(f"{settings.google_calendar_events_endpoint}/{event_id}",
-                             headers=headers)
+    event_data = make_google_request(user_id,
+                                    session,
+                                    "GET",
+                                    f"{settings.google_calendar_events_endpoint}/{event_id}")
     
-    response.raise_for_status()
-    event_data = response.json()
-    event = CalendarEvent.model_validate(event_data)
+    if not event_data:
+        return None
     
-    return event
+    return CalendarEvent.model_validate(event_data)
 
 @tool
-def list_events(user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> List[CalendarEvent]:
+def list_events(user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> List[CalendarEvent]:
     """List upcoming calendar events from the user's primary calendar.
 
     Retrieves a list of future events, useful for checking availability or finding specific events to modify.
@@ -100,25 +92,22 @@ def list_events(user_id: Annotated[str, InjectedState("user_id")], config: Runna
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    response = requests.get(f"{settings.google_calendar_events_endpoint}",
-                             headers=headers)
+    event_list_data = make_google_request(user_id,
+                                        session,
+                                        "GET",
+                                        settings.google_calendar_events_endpoint)
     
-    response.raise_for_status()
-    event_list_data = response.json().get("items")
+    if not event_list_data:
+        return []
+    
     events = []
-    
-    if event_list_data:
-        for e in event_list_data:
-            events.append(CalendarEvent.model_validate(e))
+    for e in event_list_data.get("items"):
+        events.append(CalendarEvent.model_validate(e))
     
     return events
 
 @tool
-def update_event(event_id: str, event: CalendarEvent, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> CalendarEvent:
+def update_event(event_id: str, event: CalendarEvent, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> CalendarEvent:
     """Update an existing calendar event.
 
     Modifies event details such as rescheduling (start/end times), renaming, or changing description.
@@ -137,22 +126,19 @@ def update_event(event_id: str, event: CalendarEvent, user_id: Annotated[str, In
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    response = requests.put(f"{settings.google_calendar_events_endpoint}/{event_id}",
-                             json=event.model_dump(),
-                             headers=headers)
+    event_data = make_google_request(user_id,
+                                    session,
+                                    "PUT",
+                                    f"{settings.google_calendar_events_endpoint}/{event_id}",
+                                    json=event.model_dump_json())
     
-    response.raise_for_status()
-    event_data = response.json()
-    event = CalendarEvent.model_validate(event_data)
+    if not event_data:
+        return None
     
-    return event
-
+    return CalendarEvent.model_validate(event_data)
+    
 @tool
-def delete_event(event_id: str, user_id: Annotated[str, InjectedState("user_id")], config: RunnableConfig) -> None:
+def delete_event(event_id: str, user_id: Annotated[int, InjectedState("user_id")], config: RunnableConfig) -> None:
     """Permanently delete a calendar event.
 
     Removes an event from the calendar. This action is irreversible.
@@ -170,14 +156,10 @@ def delete_event(event_id: str, user_id: Annotated[str, InjectedState("user_id")
     """
     
     session = config["configurable"]["session"]
-    db_token = tokens_service.get_token_by_user_id(user_id, session)
-    headers = {
-        "Authorization": f"Bearer {db_token.access_token}"
-    }
-    response = requests.delete(f"{settings.google_calendar_events_endpoint}/{event_id}",
-                             headers=headers)
-    
-    response.raise_for_status()
+    make_google_request(user_id,
+                        session,
+                        "DELETE",
+                        f"{settings.google_calendar_events_endpoint}/{event_id}")
 
 def get_tools():
     tools = []

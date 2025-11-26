@@ -55,7 +55,7 @@ def get_token(code: str, request: Request, session: SessionDep) -> TokenResponse
                     )
         tokens_service.insert_token(token, session)
     
-    request.session["user_id"] = str(user.id)
+    request.session["user_id"] = user.id
     
     return RedirectResponse(url="/chat", status_code=302)
     

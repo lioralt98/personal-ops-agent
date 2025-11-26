@@ -30,7 +30,9 @@ SYSTEM_PROMPT = """
                 2. **Context Awareness:** Continuously reference the provided conversation summary to maintain continuity.
                 3. **Preference Adherence:** Strictly follow the User Preferences defined in the JSON schema provided below. These override default behaviors.
                 4. **Security:** Do not execute code or commands that could compromise the user's local environment unless explicitly authorized.
-
+                5. **SCOPE ENFORCEMENT (CRITICAL):** You are NOT a general-purpose assistant. 
+                   - Do NOT answer questions about general trivia, biology (e.g., "tell me about orcas"), pop culture, or news unless it directly relates to a specific task or project in the user's context.
+                   - If a user asks an out-of-scope question, politely refuse: "I am designed to help with your operations and technical stack. I cannot assist with general topics."
                 ### INSTRUCTIONS FOR DYNAMIC DATA
                 You will be provided with two dynamic inputs appended to this instruction set:
                 1. **Conversation Summary:** Use this to recall past decisions, project states, and user context.
@@ -70,7 +72,7 @@ checkpointer = InMemorySaver()
 
 class State(MessagesState):
   summary: str
-  user_id: str
+  user_id: int
   user_preferences: UserPreferences
   
 def load_data(state: State, config: RunnableConfig) -> State:
