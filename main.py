@@ -64,3 +64,7 @@ def chat_page(request: Request, session: SessionDep):
         return RedirectResponse(url="/auth/oauth2/google/refresh")
     
     return templates.TemplateResponse("chat.html", {"request": request})
+
+@app.get("/editor")
+def editor_page(request: Request):
+    return templates.TemplateResponse("editor.html", {"request": request})

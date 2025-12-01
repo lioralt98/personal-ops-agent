@@ -6,9 +6,10 @@ from langchain_core.messages import HumanMessage
 from app.core.database import SessionDep
 from app.core.config import get_settings
 import app.services.users as users_service
-import app.services.agent as agent_service
 from app.tools.registry import derive_access
 import app.services.tokens as tokens_service
+from app.graphs.supervisor import get_supervisor_graph
+from langgraph.types import Command
 
 settings = get_settings()
 
@@ -31,31 +32,23 @@ def chat(message: ChatMessage, request: Request, session: SessionDep):
     scopes = set(token.scope.split(" "))
     user_domains, user_scopes = derive_access(scopes)
     
-    agent = agent_service.get_agent(user_scopes, user_domains)
+    agent = get_supervisor_graph()
+    config = {"configurable": {"thread_id": user_id,
+                              "session": session}}
+    state = agent.get_state(config=config)
+    
+    if state.next:
+        user_plan = agent.invoke(Command(resume=message.message), config=config)
+    
+    else:
+        user_plan = agent.invoke(
+            {"human_feedback": [HumanMessage(content=message.message)],
+            "user_id": user_id,
+            },
+            config=config, 
+            )
         
-    result = agent.invoke(
-        {"messages": [HumanMessage(content=message.message)],
-         "user_id": user_id,
-         },
-        {"configurable": {"thread_id": user_id,
-                          "session": session}}, 
-        )
-    last_message = result.get("messages")[-1]
-    content = last_message.content
+    print(user_plan) 
+    return {"user_plan": user_plan}
+     
     
-    tool_calls = last_message.tool_calls if hasattr(last_message, 'tool_calls') else None
-    tool_names = [tool_call.name for tool_call in tool_calls] if tool_calls else None
-    
-    if isinstance(content, str):
-        return {"response": content, "tool_calls": tool_names}
-    
-    elif isinstance(content, list):
-        text_block = content[0]
-        
-        if isinstance(text_block, dict) and 'text' in text_block:
-            return {"response": text_block['text'], "tool_calls": tool_names}
-
-        elif isinstance(text_block, str):
-            return {"response": "".join(content), "tool_calls": tool_names}
-    
-    return {"response": str(content), "tool_calls": tool_names}

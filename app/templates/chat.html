@@ -671,10 +671,11 @@
                 });
 
                 const data = await response.json();
-                
-                // Show agent response
-                // Assuming data returns { response: "text", thought: "optional", tool: "optional" }
-                addMessageToUI('agent', data.response, null, data.tool_calls);
+
+                if (data.user_plan) {
+                    console.log(data.user_plan);
+                    parseAndRender(data.user_plan);
+                }
 
             } catch (error) {
                 console.error("Error calling chat API:", error);

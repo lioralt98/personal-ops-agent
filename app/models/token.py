@@ -6,12 +6,11 @@ from sqlmodel import SQLModel, Field, Relationship
 from pydantic import field_validator
 
 from app.core.security import encrypt_refresh_token, decrypt_refresh_token
-from sqlmodel import TEXT
 
 class Token(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", unique=True)
-    refresh_token: str = Field(default=None, sa_type=TEXT)
+    refresh_token: str = Field(sa_type=TEXT)
     access_token: str
     expires_at: datetime
     refresh_token_expires_at: datetime
