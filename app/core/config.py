@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     fernet_encryption_key: str
     openai_api_key: str | None = None
     gemini_api_key: str | None = None
+    gemini_model_name: str = "gemini-2.5-flash"
+    tavily_api_key: str | None = None
     langsmith_api_key: str | None = None
     langsmith_tracing: bool
     session_middleware_secret_key: str

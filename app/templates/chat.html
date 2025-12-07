@@ -464,6 +464,47 @@
 
         .animate-entry { animation: fadeIn 0.4s ease-out forwards; }
 
+        /* --- WORKFLOW VISUALIZATION --- */
+        .user-card {
+            background: #FFFFFF;
+            color: #1C1F24;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 340px;
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .user-card .checkbox-mock {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #CBD5E1;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .agent-card {
+            background: #09090B;
+            color: #F8FAFC;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #27272A;
+            width: 100%;
+            max-width: 340px;
+            font-size: 13px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            position: relative;
+            z-index: 2;
+        }
+
     </style>
 </head>
 <body>
@@ -527,7 +568,26 @@
             </header>
 
             <div class="chat-stream">
-                <!-- Chat is now empty by default, waiting for JS to populate -->
+                <!-- ... existing chat stream content ... -->
+            </div>
+
+            <!-- ADD THIS WORKSPACE SECTION -->
+            <div id="planWorkspace" style="display: none; flex: 1; position: relative; overflow: hidden;">
+                <svg id="connections-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></svg>
+                
+                <div style="display: flex; height: 100%; width: 100%;">
+                    <!-- Agent Pane -->
+                    <div id="agent-pane" style="flex: 1; padding: 20px; background: var(--bg-app); overflow-y: auto; border-right: 1px solid var(--border-subtle);">
+                        <div style="font-size: 12px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 20px; text-transform: uppercase;">Agent Tasks</div>
+                        <div id="agent-tasks-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center;"></div>
+                    </div>
+                    
+                    <!-- User Pane -->
+                    <div id="user-pane" style="flex: 1; padding: 20px; background: var(--bg-surface); overflow-y: auto;">
+                        <div style="font-size: 12px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 20px; text-transform: uppercase;">User Tasks</div>
+                        <div id="user-tasks-container" style="display: flex; flex-direction: column; gap: 20px; align-items: center;"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- The Cockpit Input -->
@@ -672,9 +732,9 @@
 
                 const data = await response.json();
 
-                if (data.user_plan) {
-                    console.log(data.user_plan);
-                    parseAndRender(data.user_plan);
+                if (data.steps) {
+                    console.log(data.steps);
+                    parseAndRender(data.steps);
                 }
 
             } catch (error) {
@@ -684,6 +744,29 @@
                     addMessageToUI('agent', "I'm having trouble connecting to the server, but I received your message: " + message);
                 }, 1000);
             }
+        }
+
+        function parseAndRender(steps) {
+            if (!steps) return;
+
+            const agentTasks = []
+            const userTasks = []
+            const edges = []
+
+            steps.forEach(step => {
+                if ("action_type" in step.config)
+                    userTasks.push([step.id, step.title]);
+                else
+                    agentTasks.push([step.id, step.title]);
+
+                if (step.dependencies) {
+                    step.dependencies.forEach(depId => {
+                        edges.push([depId, step.id]);
+                    });
+                }
+            });
+
+            renderWorkflow(agentTasks, userTasks, edges);
         }
 
         // 4. Dynamic Message Rendering Function
@@ -734,6 +817,141 @@
             
             // Scroll to bottom
             stream.scrollTop = stream.scrollHeight;
+        }
+
+        function renderWorkflow(agentTasks, userTasks, edges) {
+            document.querySelector('.chat-stream').style.display = 'none';
+            const workspace = document.getElementById('planWorkspace');
+            workspace.style.display = 'flex';
+
+            const agentContainer = document.getElementById('agent-tasks-container');
+            const userContainer = document.getElementById('user-tasks-container');
+            const svgLayer = document.getElementById('connections-layer');
+
+            // 1. Clear previous render
+            agentContainer.innerHTML = '';
+            userContainer.innerHTML = '';
+            svgLayer.innerHTML = '';
+
+            // 2. Helper to create DOM elements
+            const createTaskElement = (id, text, type) => {
+                const el = document.createElement('div');
+                el.id = id; // Important for linking
+                
+                if (type === 'agent') {
+                    el.className = 'agent-card';
+                    el.innerText = text;
+                } else {
+                    el.className = 'user-card';
+                    // Add mock checkbox for user
+                    el.innerHTML = `<span class="checkbox-mock"></span> ${text}`;
+                }
+                return el;
+            };
+
+            // 3. Render Nodes
+            agentTasks.forEach(task => {
+                const [id, text] = task;
+                agentContainer.appendChild(createTaskElement(id, text, 'agent'));
+            });
+
+            userTasks.forEach(task => {
+                const [id, text] = task;
+                userContainer.appendChild(createTaskElement(id, text, 'user'));
+            });
+
+            // 4. Render Edges (Wait for DOM layout to calculate positions)
+            // We use setTimeout to ensure elements are painted and have dimensions
+            setTimeout(() => {
+                drawEdges(edges);
+            }, 50);
+
+            // Redraw on resize
+            window.addEventListener('resize', () => drawEdges(edges));
+        }
+
+        function drawEdges(edges) {
+            const svgLayer = document.getElementById('connections-layer');
+            svgLayer.innerHTML = ''; // Clear existing lines
+
+            // Get the offset of the drawing layer relative to the viewport
+            const svgRect = svgLayer.getBoundingClientRect();
+
+            edges.forEach(edge => {
+                const [startId, endId] = edge;
+                const startEl = document.getElementById(startId);
+                const endEl = document.getElementById(endId);
+
+                if (startEl && endEl) {
+                    const line = createPath(startEl, endEl, svgRect);
+                    svgLayer.appendChild(line);
+                }
+            });
+        }
+
+        function createPath(startEl, endEl, svgRect) {
+            const startRect = startEl.getBoundingClientRect();
+            const endRect = endEl.getBoundingClientRect();
+
+            // Calculate coordinates relative to the SVG container
+            // We subtract svgRect.left/top from the element's viewport coordinates
+
+            const isStartAgent = startEl.closest('#agent-pane') !== null;
+            let x1, y1;
+            
+            // Start Point
+            if (isStartAgent) {
+                // Agent (Left Pane) -> Connect from Right Side
+                x1 = startRect.right - svgRect.left;
+                y1 = (startRect.top + startRect.height / 2) - svgRect.top;
+            } else {
+                // User (Right Pane) -> Connect from Left Side
+                x1 = startRect.left - svgRect.left;
+                y1 = (startRect.top + startRect.height / 2) - svgRect.top;
+            }
+
+            const isEndAgent = endEl.closest('#agent-pane') !== null;
+            let x2, y2;
+
+            // End Point
+            if (isEndAgent) {
+                // Target is Agent -> Connect at Right Side
+                x2 = endRect.right - svgRect.left;
+                y2 = (endRect.top + endRect.height / 2) - svgRect.top;
+            } else {
+                // Target is User -> Connect at Left Side
+                x2 = endRect.left - svgRect.left;
+                y2 = (endRect.top + endRect.height / 2) - svgRect.top;
+            }
+
+            // Bezier Control Points
+            // Logic: Lines should flow through the center channel.
+            // If Start is Agent (Left) and End is User (Right): Flow is Left -> Right.
+            // If Start is User (Right) and End is Agent (Left): Flow is Right -> Left.
+            
+            // We pull the control points towards the "center" (the gap).
+            // Agent side points pull Right (+), User side points pull Left (-).
+            
+            const dist = Math.abs(x2 - x1) * 0.5; // Curvature factor
+
+            // CP1 (Start Control Point)
+            const cp1x = isStartAgent ? x1 + dist : x1 - dist;
+            const cp1y = y1;
+
+            // CP2 (End Control Point)
+            const cp2x = isEndAgent ? x2 + dist : x2 - dist;
+            const cp2y = y2;
+
+            const pathData = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", pathData);
+            path.setAttribute("stroke", "#64748b"); // Slate color for lines
+            path.setAttribute("stroke-width", "2");
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke-dasharray", "5,5"); // Dashed line style
+            
+            return path;
         }
     </script>
 </body>

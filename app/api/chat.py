@@ -17,7 +17,6 @@ router = APIRouter(prefix="/api/chat")
 
 @router.post("/")
 def chat(message: ChatMessage, request: Request, session: SessionDep):
-    print(message)
     user_id = request.session.get("user_id")
     
     if not user_id:
@@ -32,23 +31,24 @@ def chat(message: ChatMessage, request: Request, session: SessionDep):
     scopes = set(token.scope.split(" "))
     user_domains, user_scopes = derive_access(scopes)
     
-    agent = get_supervisor_graph()
+    agent = get_supervisor_graph(user_scopes, user_domains)
     config = {"configurable": {"thread_id": user_id,
                               "session": session}}
+    
+    for chunk in agent.stream({
+        "goal": message.message,
+        "user_id": user_id,
+        },
+     stream_mode="values",
+     config=config,
+    ):
+        print(chunk)
+    
     state = agent.get_state(config=config)
+    print(f"\n\n\nINTERRUPTED:\n{state}")
     
     if state.next:
-        user_plan = agent.invoke(Command(resume=message.message), config=config)
-    
-    else:
-        user_plan = agent.invoke(
-            {"human_feedback": [HumanMessage(content=message.message)],
-            "user_id": user_id,
-            },
-            config=config, 
-            )
-        
-    print(user_plan) 
-    return {"user_plan": user_plan}
+        return {"steps": state.tasks[0].interrupts[0].value["steps"]}
+                              
      
     
